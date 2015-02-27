@@ -5,58 +5,72 @@
 
 #include <3ds.h>
 
-Result http_download(httpcContext *context)
+/*****************************************************************
+| httpDownload will return an result message of status
+|	0 = OK
+|	1 = Empty response?
+|	-2 = Error 200
+|	Any values not 0 are errors (need to look into this more)
+*****************************************************************/
+Result httpDownload(httpcContext *httpContext)
 {
-	Result ret=0;
-	u8* framebuf_top;
-	u32 statuscode=0;
-	u32 size=0, contentsize=0;
+	Result returnCode = 0;
+	u8* frameBufferTop;
+	u32 statusCode=0;
+	u32 rawSize=0, contentSize=0;
 	u8 *buf;
 
-	ret = httpcBeginRequest(context);
-	if(ret!=0)return ret;
+	returnCode = httpcBeginRequest(httpContext);
+	if(returnCode != 0)
+		return returnCode;
 
-	ret = httpcGetResponseStatusCode(context, &statuscode, 0);
-	if(ret!=0)return ret;
+	returnCode = httpcGetResponseStatusCode(httpContext, &statusCode, 0);
+	if(returnCode != 0)
+		return returnCode;
 
-	if(statuscode!=200)return -2;
+	if(statusCode != 200)
+		return -2;
 
-	ret=httpcGetDownloadSizeState(context, NULL, &contentsize);
-	if(ret!=0)return ret;
+	returnCode=httpcGetDownloadSizeState(httpContext, NULL, &contentSize);
+	if(returnCode != 0)
+		return returnCode;
 
-	printf("size: %"PRId32"\n",contentsize);
+	printf("Size: %"PRId32"\n", contentSize);
 	gfxFlushBuffers();
 
-	buf = (u8*)malloc(contentsize);
-	if(buf==NULL)return -1;
-	memset(buf, 0, contentsize);
+	buf = (u8*)malloc(contentSize);
+
+	if(buf == NULL)
+		return -1;
+
+	memset(buf, 0, contentSize);
 
 
-	ret = httpcDownloadData(context, buf, contentsize, NULL);
-	if(ret!=0)
+	returnCode = httpcDownloadData(httpContext, buf, contentSize, NULL);
+	if(returnCode!=0)
 	{
 		free(buf);
-		return ret;
+		return returnCode;
 	}
 
-	size = contentsize;
-	if(size>(240*400*3*2))size = 240*400*3*2;
+	rawSize = contentSize;
+	if(rawSize > (240*400*3*2))
+		rawSize = 240*400*3*2;
 
-	framebuf_top = gfxGetFramebuffer(GFX_TOP, GFX_LEFT, NULL, NULL);
-	memcpy(framebuf_top, buf, size);
+	frameBufferTop = gfxGetFramebuffer(GFX_TOP, GFX_LEFT, NULL, NULL);
+	memcpy(frameBufferTop, buf, rawSize);
 
 	gfxFlushBuffers();
 	gfxSwapBuffers();
 
-	framebuf_top = gfxGetFramebuffer(GFX_TOP, GFX_LEFT, NULL, NULL);
-	memcpy(framebuf_top, buf, size);
+	frameBufferTop = gfxGetFramebuffer(GFX_TOP, GFX_LEFT, NULL, NULL);
+	memcpy(frameBufferTop, buf, rawSize);
 
 	gfxFlushBuffers();
 	gfxSwapBuffers();
 	gspWaitForVBlank();
 
 	free(buf);
-	free(framebuf_top);
 	
 	return 0;
 }
@@ -84,34 +98,32 @@ int main()
 			char *webUrl = "http://devkitpro.org/misc/httpexample_rawimg.rgb";
 			Result retResult = 0;
 			httpcContext httpContext;
+
 			gfxFlushBuffers();
 
-			printf("Attempting to initiate download...\n");
+			printf("[---] Attempting to initiate download...\n[-->] Connecting to:\n\n%s\n\n", webUrl);
+
 			retResult = httpcOpenContext(&httpContext, webUrl , 0);
 			gfxFlushBuffers();
 
-			printf("Opened HTTP request!\nConnecting to:\n>>%s\n", webUrl);
-			printf("#DEBUG retResult value is: %"PRId32"\n", retResult);
-			gfxFlushBuffers();
+			printf("[DBG] retResult value is: %"PRId32"\n\n", retResult);
 
-				gfxFlushBuffers();
-				printf("Success! Running final download process...\n");
-				gfxFlushBuffers();
+			if(retResult == 0)
+			{
+				printf("[!!!] Connected!\n[<--]Downloading files...\n");
 				
-				retResult = http_download(&httpContext);
-				gfxFlushBuffers();
+				retResult = httpDownload(&httpContext);
 
-				printf("#DEBUG retResult value is: %"PRId32"\n",retResult);
-				gfxFlushBuffers();
-				
-				printf("Closing web request...\n");
-				gfxFlushBuffers();
-
+				printf("[DBG] retResult value is: %"PRId32"\n[-X>] Closing web request...\n", retResult);
 				httpcCloseContext(&httpContext);
-				gfxFlushBuffers();
 
-				printf("Done!\n");
-				gfxFlushBuffers();
+				printf("[!!!] Done!\n");
+			}
+			else
+			{
+				printf("[!!!] Error: was not able to connect to server!");
+			}
+			gfxFlushBuffers();
 		}
 
 		if(kDown & KEY_DDOWN)
